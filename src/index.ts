@@ -10,17 +10,25 @@ const app = express();
 const port = process.env.PORT || 8000;
 console.log(process.env.PORT);
 
-// app.use(json({ limit: "100kb" }));
+app.use(json({ limit: "100kb" }));
 
-const verifySignature = (req: express.Request) => {
+const verifySignature = (req: Request) => {
   const secret = process.env.GITHUB_WEBHOOK_SECRET || "";
   const signature = req.headers["x-hub-signature-256"] as string;
+
+  if (!signature) {
+    console.error("Missing signature");
+    return false;
+  }
+
   const hmac = crypto.createHmac("sha256", secret);
   const digest = `sha256=${hmac
     .update(JSON.stringify(req.body))
     .digest("hex")}`;
+
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
 };
+
 app.post("/webhook", (req: Request, res: Response) => {
   if (verifySignature(req)) {
     const event = req.headers["x-github-event"];
