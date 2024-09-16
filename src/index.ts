@@ -10,31 +10,56 @@ const app = express();
 const port = process.env.PORT || 8000;
 console.log(process.env.PORT);
 
-app.use(json({ limit: "100kb" }));
-
-const verifySignature = (req: Request) => {
+app.use((req: Request, res: Response, next) => {
+    console.log(req.url);
+  next();
+});
+app.use(
+  express.json({
+    verify: (req: any, res, buf, encoding) => {
+      req.rawBody = buf;
+    },
+  })
+);
+const verifySignature = (req: Request & { rawBody?: Buffer }) => {
   const secret = process.env.GITHUB_WEBHOOK_SECRET || "";
-  const signature = req.headers["x-hub-signature-256"] as string;
+  const signature256 = req.headers["x-hub-signature-256"] as string;
 
-  if (!signature) {
-    console.error("Missing signature");
+  if (!signature256) {
+    console.error("Missing X-Hub-Signature-256 header");
+    return false;
+  }
+
+  if (!req.rawBody) {
+    console.error("Missing rawBody in request");
     return false;
   }
 
   const hmac = crypto.createHmac("sha256", secret);
-  const digest = `sha256=${hmac
-    .update(JSON.stringify(req.body))
-    .digest("hex")}`;
+  const digest = `sha256=${hmac.update(req.rawBody).digest("hex")}`;
 
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
+  const isValid = crypto.timingSafeEqual(
+    Buffer.from(signature256),
+    Buffer.from(digest)
+  );
+
+  if (!isValid) {
+    console.error("Invalid signature");
+  }
+
+  return isValid;
 };
+
+app.get("/", (req: Request, res: Response) => {
+  res.status(200).json({ message: "Server is running" });
+});
 
 app.post("/webhook", (req: Request, res: Response) => {
   if (verifySignature(req)) {
     const event = req.headers["x-github-event"];
     const payload = req.body;
 
-    console.log(`Received github event: ${event}`);
+    console.log(`Received GitHub event: ${event}`);
     if (event === "push") {
       console.log("Received push event:", payload);
     }
@@ -43,6 +68,7 @@ app.post("/webhook", (req: Request, res: Response) => {
     res.status(403).json("Invalid signature");
   }
 });
+
 
 app.get("/github/:username", getUserRepos);
 
