@@ -50,11 +50,11 @@ const verifySignature = (req: Request & { rawBody?: Buffer }) => {
   return isValid;
 };
 
-app.get("/", (req: Request, res: Response) => {
+app.get("/health", (req: Request, res: Response) => {
   res.status(200).json({ message: "Server is running" });
 });
 //checkking webhook
-app.post("/webhook", (req: Request, res: Response) => {
+app.post("/", (req: Request, res: Response) => {
   if (verifySignature(req)) {
     const event = req.headers["x-github-event"];
     const payload = req.body;
